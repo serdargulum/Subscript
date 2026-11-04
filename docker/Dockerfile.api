@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY Subscript.slnx ./
+COPY src/Subscript.Domain/Subscript.Domain.csproj src/Subscript.Domain/
+COPY src/Subscript.Application/Subscript.Application.csproj src/Subscript.Application/
+COPY src/Subscript.Infrastructure/Subscript.Infrastructure.csproj src/Subscript.Infrastructure/
+COPY src/Subscript.Api/Subscript.Api.csproj src/Subscript.Api/
+
+RUN dotnet restore src/Subscript.Api/Subscript.Api.csproj
+
+COPY src/ ./src/
+RUN dotnet publish src/Subscript.Api/Subscript.Api.csproj -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+EXPOSE 8080
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "Subscript.Api.dll"]

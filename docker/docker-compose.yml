@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: subscript-postgres
+    environment:
+      POSTGRES_DB: subscript
+      POSTGRES_USER: subscript
+      POSTGRES_PASSWORD: subscript
+    # 5433 avoids the local Postgres.app/Homebrew server that owns 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U subscript -d subscript"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: subscript-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: subscript
+      RABBITMQ_DEFAULT_PASS: subscript
+    # 5673/15673 avoid a local Homebrew RabbitMQ that owns 5672/15672.
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: subscript-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=subscript;Username=subscript;Password=subscript
+      ConnectionStrings__RabbitMq: amqp://subscript:subscript@rabbitmq:5672/
+      Authentication__ApiKey: dev-api-key-change-me
+      Database__ApplyMigrationsOnStartup: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
