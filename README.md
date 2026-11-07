@@ -65,17 +65,36 @@ docker/
 
 ## Quick start
 
-1. Start PostgreSQL and RabbitMQ:
+1. Start the API, PostgreSQL, and RabbitMQ with Compose:
 
    ```bash
-   docker compose -f docker/docker-compose.yml up -d postgres rabbitmq
+   docker compose -f docker/docker-compose.yml up -d --build
    ```
 
-   Host ports: PostgreSQL `5433`, RabbitMQ `5673`, management UI `http://localhost:15673`.
-   They intentionally avoid `5432`/`5672`, which local Postgres.app/Homebrew services
-   commonly occupy; inside Compose the API still uses `postgres:5432` and `rabbitmq:5672`.
-   If you point the API at another PostgreSQL on `5432`, expect
+   The Compose project name and container names are pinned in `docker/docker-compose.yml`
+   (`name: subscript`), so the services are always `subscript-api`, `subscript-postgres`,
+   and `subscript-rabbitmq` no matter which directory you run the command from.
+
+   | Service | Host port | In Compose |
+   |---------|-----------|------------|
+   | API | `8080` | `8080` |
+   | PostgreSQL | `5433` | `5432` |
+   | RabbitMQ | `5673` (UI `15673`) | `5672` (UI `15672`) |
+
+   The host ports intentionally avoid `5432`/`5672`, which local Postgres.app/Homebrew
+   services commonly occupy; inside Compose the API still uses `postgres:5432` and
+   `rabbitmq:5672`. If you point the API at another PostgreSQL on `5432`, expect
    `role "subscript" does not exist`.
+
+   In `Development` the API applies migrations and seeds demo data on startup:
+
+   - API: `http://localhost:8080`
+   - Swagger: `http://localhost:8080/swagger`
+   - Health (Postgres + RabbitMQ): `http://localhost:8080/health`
+
+   To run the API on the host instead of Compose, use
+   `dotnet run --project src/Subscript.Api`; it serves on `http://localhost:5226` (see
+   `Properties/launchSettings.json`), with Swagger at `/swagger` and health at `/health`.
 
 2. Restore the EF Core CLI used for migrations:
 
@@ -83,17 +102,7 @@ docker/
    dotnet tool restore
    ```
 
-3. Run the API. In `Development` it applies migrations and seeds demo data:
-
-   ```bash
-   dotnet run --project src/Subscript.Api
-   ```
-
-   - API: `http://localhost:5226`
-   - Swagger: `http://localhost:5226/swagger`
-   - Health (Postgres + RabbitMQ): `http://localhost:5226/health`
-
-4. Run the admin console:
+3. Run the admin console:
 
    ```bash
    cd apps/admin
@@ -102,20 +111,21 @@ docker/
    npm run dev
    ```
 
+   `API_BASE_URL` must point at the port the API actually listens on:
+   `http://localhost:8080` when the API runs in Compose, `http://localhost:5226` when it
+   runs on the host. The admin never calls the API from the browser; the BFF proxy
+   (`src/app/api/backend/[...path]/route.ts`) forwards `/api/backend/{path}` to
+   `{API_BASE_URL}/api/v1/{path}` on the server, so a stale port makes every dashboard
+   request fail with a connection error even though the API is healthy.
+
    Open `http://localhost:3000`. The example credentials are `admin` / `change-me`;
    set `SESSION_PASSWORD`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `API_BASE_URL`, and
    `API_KEY` in `.env.local` before using it outside local development.
 
-Direct API calls use the API key:
+Direct API calls use the API key (against either origin):
 
 ```http
 X-Api-Key: dev-api-key-change-me
-```
-
-The full stack can also run through Compose (API on `http://localhost:8080`):
-
-```bash
-docker compose -f docker/docker-compose.yml up --build
 ```
 
 ## API
@@ -226,7 +236,7 @@ Admin configuration is read only on the server from `apps/admin/.env.local`:
 | `SESSION_PASSWORD` | Encrypts the session cookie; at least 32 characters |
 | `ADMIN_USERNAME` | Shared admin username |
 | `ADMIN_PASSWORD` | Shared admin password |
-| `API_BASE_URL` | .NET API origin, default `http://localhost:5226` |
+| `API_BASE_URL` | .NET API origin: `http://localhost:8080` (Compose) or `http://localhost:5226` (`dotnet run`) |
 | `API_KEY` | Must match `Authentication:ApiKey`; never exposed to the browser |
 
 See [Quick start](#quick-start) for the local run commands. For a production build,
