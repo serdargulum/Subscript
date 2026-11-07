@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/absolute/path/to/Subscript"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@microsoft/postgres-mcp", "run"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"
+      }
+    },
+    "docker": {
+      "command": "docker",
+      "args": ["mcp", "gateway", "run"]
+    }
+  }
+}

@@ -27,6 +27,7 @@ recurring billing.
 - [Database Migrations](#database-migrations)
 - [Tests](#tests)
 - [Configuration](#configuration)
+- [MCP Tools (Agents)](#mcp-tools-agents)
 
 ## Stack
 
@@ -326,3 +327,38 @@ CI runs the .NET build/tests and the admin production build.
 
 Admin environment variables live in `apps/admin/.env.local`; see
 `apps/admin/.env.example`. Never commit that file or real credentials.
+
+## MCP tools (agents)
+
+Agent tooling is configured in `.agents/mcp.json`. That file holds a GitHub personal
+access token and the database password, so it is **gitignored** and never committed —
+every developer keeps their own local copy.
+
+Copy the template and fill in the secrets:
+
+```bash
+cp .agents/mcp.example.json .agents/mcp.json
+```
+
+Then export the two secrets (or paste them into your local `mcp.json`):
+
+| Variable | Purpose |
+|----------|---------|
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | Authenticates `ghcr.io/github/github-mcp-server` |
+| `POSTGRES_CONNECTION_STRING` | e.g. `postgresql://postgres:<password>@localhost:5433/subscript` |
+
+The example also ships `/absolute/path/to/Subscript` for the filesystem server's root;
+replace it with your checkout path.
+
+Connected servers and their capabilities:
+
+| Server | Tools | Purpose |
+|--------|-------|---------|
+| `github` | 46 | Repos, files, commits, pull requests, issues, releases, code search |
+| `filesystem` | 14 | Read/write files, scoped to the repository root |
+| `postgres` | 13 | Query and inspect the database, bulk CSV load, perf metrics |
+| `docker` | 8 | MCP gateway management (find/add/remove servers, profiles) |
+
+Note that the `postgres` profile is configured read-write, so `modify` and
+`bulk_load_csv` can change the `subscript` database. Point it at a disposable database
+when experimenting.

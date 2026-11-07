@@ -12,6 +12,7 @@ obj/
 appsettings.*.local.json
 .env
 .env.local
+.agents/mcp.json
 
 ## IDE
 .idea/
