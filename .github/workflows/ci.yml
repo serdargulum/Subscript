@@ -2,36 +2,82 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-test:
+  dotnet:
+    name: .NET build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read TargetFramework
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          frameworks="$(
+            {
+              find . -type f -name '*.csproj' \
+                -exec grep -hE '<TargetFrameworks?>[^<]+</TargetFrameworks?>' {} + || true
+            } | sed -E 's/^[[:space:]]+//; s#</?TargetFrameworks?>##g' | sort -u
+          )"
+
+          if [ -z "$frameworks" ]; then
+            echo "No TargetFramework found in any .csproj file." >&2
+            exit 1
+          fi
+
+          framework_count="$(printf '%s\n' "$frameworks" | wc -l | tr -d ' ')"
+          if [ "$framework_count" -gt 1 ]; then
+            printf 'Multiple TargetFrameworks found:\n%s\n' "$frameworks" >&2
+            exit 1
+          fi
+
+          tfm="$frameworks"
+          if [[ ! "$tfm" =~ ^net([0-9]+\.[0-9]+)(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "Unsupported TargetFramework: $tfm" >&2
+            exit 1
+          fi
+
+          sdk_version="${BASH_REMATCH[1]}.x"
+          echo "sdk_version=$sdk_version" >> "$GITHUB_OUTPUT"
+          echo "Using .NET SDK $sdk_version for $tfm"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: ${{ steps.target.outputs.sdk_version }}
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore Subscript.slnx
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
+      - name: Build (Release)
+        run: dotnet build Subscript.slnx --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Test (Release)
+        run: dotnet test Subscript.slnx --configuration Release --no-build --verbosity normal
 
   admin:
+    name: Admin build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/admin
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
